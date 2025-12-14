@@ -578,6 +578,83 @@
         closeSuccessBtn.addEventListener('click', () => { successModal.style.display = 'none'; });
         confirmModal.addEventListener('click', (e) => { if (e.target === confirmModal) confirmModal.style.display = 'none'; });
         successModal.addEventListener('click', (e) => { if (e.target === successModal) successModal.style.display = 'none'; });
+    
+        // ========== 管理員後台功能 ==========
+        const ADMIN_PASSWORD = 'rapidtek2025';
+        let isAdmin = false;
+
+        function checkAdminAccess() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const adminParam = urlParams.get('admin');
+            if (adminParam === ADMIN_PASSWORD) {
+                isAdmin = true;
+                document.getElementById('adminPanel').style.display = 'flex';
+                console.log('管理員模式已啟用');
+            }
+        }
+
+        // Admin: Reset employee vote
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            const empId = document.getElementById('resetEmployeeId').value.trim().toUpperCase();
+            const resultDiv = document.getElementById('resetResult');
+            
+            if (!empId) {
+                resultDiv.className = 'admin-result error';
+                resultDiv.textContent = '請輸入員工工號';
+                return;
+            }
+            
+            // Clear localStorage for this employee
+            localStorage.removeItem('voted_' + empId);
+            localStorage.removeItem('votes_' + empId);
+            
+            // Remove from votedEmployees set
+            if (state.votedEmployees) {
+                state.votedEmployees.delete(empId);
+            }
+            
+            resultDiv.className = 'admin-result success';
+            resultDiv.innerHTML = `✅ 已重置 <strong>${empId}</strong> 的瀏覽器投票紀錄<br><small>⚠️ 請記得到 Google Sheets 刪除該員工的投票資料</small>`;
+        });
+
+        // Admin: Show stats
+        document.getElementById('showStatsBtn').addEventListener('click', async () => {
+            await loadVotesFromSheets();
+            const statsDiv = document.getElementById('statsResult');
+            
+            const sortedItems = contestData
+                .map(item => ({ id: item.id, name: item.name, votes: state.votes[item.id] || 0 }))
+                .sort((a, b) => b.votes - a.votes);
+            
+            statsDiv.innerHTML = sortedItems.map(item => 
+                `<div class="admin-stat-item"><span class="num">#${item.id}</span><br><span class="votes">${item.votes} 票</span></div>`
+            ).join('');
+        });
+
+        // Admin: Show voted employees
+        document.getElementById('showVotedBtn').addEventListener('click', async () => {
+            await loadVotesFromSheets();
+            const votedDiv = document.getElementById('votedResult');
+            
+            if (state.votedEmployees && state.votedEmployees.size > 0) {
+                const list = [...state.votedEmployees].sort().join(', ');
+                votedDiv.className = 'admin-result info';
+                votedDiv.innerHTML = `<strong>已投票 (${state.votedEmployees.size} 人):</strong><br>${list}`;
+            } else {
+                votedDiv.className = 'admin-result info';
+                votedDiv.textContent = '目前沒有投票紀錄';
+            }
+        });
+
+        // Admin: Close panel
+        document.getElementById('adminClose').addEventListener('click', () => {
+            document.getElementById('adminPanel').style.display = 'none';
+        });
+
+        // Check admin access on page load
+        checkAdminAccess();
+        // ========== 管理員後台功能結束 ==========
+
     </script>
 
     <!-- Photo Preview Modal -->
