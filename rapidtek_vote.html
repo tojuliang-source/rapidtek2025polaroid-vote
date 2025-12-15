@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rapidtek「一瞬・職場」拍立得攝影活動｜投票系統</title>
+  <style>
+    :root{
+      --brand:#0b72ff; --brand-600:#085ad1; --bg:#f7f8fa; --surface:#ffffff; --text:#1d2129; --muted:#667085;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;}
+    a{color:var(--brand);text-decoration:none}
+    .container{max-width:1060px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:center;gap:12px;padding:16px 0}
+    header img.logo{width:40px;height:40px;object-fit:contain}
+    h1{font-size:22px;margin:0}
+    .card{background:var(--surface);border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,.06);}
+    .card .content{padding:20px}
+
+    /* 票數條與狀態 */
+    .status{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 16px}
+    .status .remaining{font-weight:600}
+    .status .logout{color:#ef4444}
+
+    /* 圖片網格 */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    @media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:600px){.grid{grid-template-columns:1fr}}
+    .item{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+
+    /* 直式照片維持原形狀，避免裁切 */
+    .item img.photo{width:100%;height:auto;object-fit:contain;background:#00000010}
+
+    .item .meta{display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
+    .item .title{font-size:14px;color:var(--text);font-weight:600}
+    .item .actions{display:flex;gap:8px}
+    .btn{padding:8px 12px;border-radius:10px;border:1px solid #e5e7eb;background:#fff;color:#111827;cursor:pointer}
+    .btn-primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .btn-primary:disabled{background:#9dbbf9;border-color:#9dbbf9;color:#fff;cursor:not-allowed}
+
+    /* 隱藏得票數（僅前端視覺）*/
+    .vote-count, .votes, .badge-votes, .count-votes, .item-votes, .ranking-votes {display:none !important}
+
+    /* 熱門區塊（不顯示票數字樣）*/
+    .section-title{font-weight:700;margin:8px 0 12px}
+
+    /* 投票彈窗 */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:none;align-items:center;justify-content:center}
+    .modal .dialog{width:min(520px,92vw);background:#fff;border-radius:14px;border:1px solid #e5e7eb}
+    .modal .dialog .content{padding:18px}
+
+    .admin{margin-top:16px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img class="logo" src="logo.png" alt="Rapidtek" />
+      <h1>「一瞬・職場」鐳洋拍立得攝影活動｜投票系統</h1>
+    </header>
+
+    <section class="card">
+      <div class="content">
+        <div class="status">
+          <div class="remaining">剩餘票數：<span id="remaining">5</span> / <span id="total">5</span></div>
+          <button id="logout" class="btn">登出</button>
+        </div>
+
+        <div class="section-title">🔥 熱門前三名</div>
+        <!-- 不顯示票數，僅顯示縮圖 -->
+        <div class="grid" id="hotGrid"></div>
+
+        <div class="section-title">全部作品</div>
+        <div class="grid" id="allGrid"></div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button id="confirm" class="btn btn-primary" disabled>確認送出投票</button>
+          <div id="selectedHint" class="muted" style="color:var(--muted)">已選擇：<span id="selectedCount">0</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin card">
+      <div class="content">
+        <div class="section-title">🔧 管理員後台</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="resetEmp" class="btn" placeholder="輸入員工工號" style="flex:1" />
+          <button id="resetBtn" class="btn">重置投票</button>
+          <a class="btn" href="https://docs.google.com/spreadsheets/d/1MgguT6wubGYgMj2kWMCosgrd2Fodof1fbbJQrcX2DpM/edit" target="_blank">📊 開啟 Google Sheets 後台</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 投票確認彈窗 -->
+  <div id="confirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <div class="dialog">
+      <div class="content">
+        <h3 id="confirmTitle" style="margin-top:0">確認投票</h3>
+        <p>您確定要將票投給這些作品嗎？投票後將無法更改。</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="cancelConfirm" class="btn">取消</button>
+          <button id="doConfirm" class="btn btn-primary">確認送出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 成功彈窗 -->
+  <div id="successModal" class="modal" role="alertdialog" aria-modal="true">
+    <div class="dialog">
+      <div class="content">
+        <h3 style="margin-top:0">投票成功！</h3>
+        <p>感謝您的參與，您的投票已成功送出。</p>
+        <div style="display:flex;justify-content:flex-end"><button id="successOk" class="btn btn-primary">確認</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 前端設定：允許自投與 5 票上限
+    const TOTAL_VOTES_LIMIT = 5; // 顯示與前端限制用途（後端仍需校驗）
+    const state = {
+      remaining: TOTAL_VOTES_LIMIT,
+      selected: new Set(),
+      currentUserId: 'EMP001',
+    };
+
+    // 模擬作品資料（含作者，允許自投）
+    const works = [
+      {id:'W01', title:'A-一樓大廳', authorId:'EMP001', img:'sample-portrait.jpg'}, // 自己的作品可投
+      {id:'W02', title:'B-研發實驗室', authorId:'EMP002', img:'sample-landscape.jpg'},
+      {id:'W03', title:'C-產線側拍', authorId:'EMP003', img:'sample-portrait2.jpg'},
+      {id:'W04', title:'D-會議室', authorId:'EMP004', img:'sample-landscape2.jpg'},
+      {id:'W05', title:'E-走廊光影', authorId:'EMP005', img:'sample-portrait3.jpg'},
+      {id:'W06', title:'F-屋頂日落', authorId:'EMP006', img:'sample-landscape3.jpg'}
+    ];
+
+    const hotGrid = document.getElementById('hotGrid');
+    const allGrid = document.getElementById('allGrid');
+
+    function renderItem(w){
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `
+        <img class="photo" src="${w.img}" alt="${w.title}" />
+        <div class="meta">
+          <div class="title">${w.title}</div>
+          <div class="actions">
+            <button class="btn btn-primary" data-id="${w.id}">投票</button>
+          </div>
+        </div>
+      `;
+      // 允許自投：不做 authorId === currentUserId 的阻擋
+      const btn = el.querySelector('button');
+      btn.addEventListener('click', () => {
+        if(state.remaining <= 0){
+          btn.disabled = true; return;
+        }
+        if(!state.selected.has(w.id)){
+          state.selected.add(w.id);
+          state.remaining -= 1;
+        }else{ // 再次點擊可取消選取（送出前可更改）
+          state.selected.delete(w.id);
+          state.remaining += 1;
+        }
+        updateUI();
+      });
+      return el;
+    }
+
+    function updateUI(){
+      document.getElementById('remaining').textContent = state.remaining;
+      document.getElementById('total').textContent = TOTAL_VOTES_LIMIT;
+      document.getElementById('selectedCount').textContent = state.selected.size;
+      document.getElementById('confirm').disabled = state.selected.size === 0;
+    }
+
+    // 渲染熱門（前 3 個示意）與全部
+    works.slice(0,3).forEach(w=> hotGrid.appendChild(renderItem(w)));
+    works.forEach(w=> allGrid.appendChild(renderItem(w)));
+    updateUI();
+
+    // 確認彈窗流程
+    const confirmModal = document.getElementById('confirmModal');
+    const successModal = document.getElementById('successModal');
+    document.getElementById('confirm').addEventListener('click',()=>{confirmModal.style.display='flex'});
+    document.getElementById('cancelConfirm').addEventListener('click',()=>{confirmModal.style.display='none'});
+    document.getElementById('doConfirm').addEventListener('click',()=>{
+      // TODO: 在此呼叫後端（Google Apps Script）寫入投票結果。
+      // 備註：請確保後端允許自投，並把每人上限設為 5。
+      confirmModal.style.display='none';
+      successModal.style.display='flex';
+    });
+    document.getElementById('successOk').addEventListener('click',()=>{successModal.style.display='none'});
+
+    // 登出（僅示意）
+    document.getElementById('logout').addEventListener('click',()=>{
+      alert('已登出（示意）');
+    });
+  </script>
+</body>
+</html>
